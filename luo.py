@@ -9,7 +9,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
 import joblib
 import os
-import pathlib  # 新增：处理路径的核心库
+import pathlib
 
 # 设置页面配置
 st.set_page_config(
@@ -19,33 +19,24 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------------------- 1. 加载外部CSV文件（修复路径+编码+调试） ----------------------
+# ---------------------- 1. 加载外部CSV文件（移除调试信息） ----------------------
 @st.cache_data
 def load_data():
-    """加载外部CSV文件，修复路径问题+增强调试+兼容编码"""
-    # 关键修复：基于脚本文件的绝对路径（不再依赖当前工作目录）
-    # 获取当前脚本所在文件夹的绝对路径
+    """加载外部CSV文件（移除调试输出）"""
+    # 脚本绝对路径（保留路径逻辑，仅去掉打印）
     script_dir = pathlib.Path(__file__).parent.absolute()
-    # 拼接CSV文件路径（确保CSV和脚本在同一目录）
-    csv_path = script_dir / "insurance-chinese.csv"  # 用pathlib避免路径分隔符问题
+    csv_path = script_dir / "insurance-chinese.csv"
     
-    # 调试：打印路径和文件列表（部署后能在日志看到，方便排查）
-    st.write(f"🔍 脚本所在目录：{script_dir}")
-    st.write(f"🔍 CSV文件路径：{csv_path}")
-    st.write(f"🔍 目录下的文件：{[f.name for f in script_dir.iterdir() if f.is_file()]}")
-    
-    # 第一步：检查文件是否存在（最核心）
+    # 检查文件是否存在
     if not os.path.exists(csv_path):
-        st.error(f"❌ CSV文件不存在！请检查：{csv_path}")
-        st.error("请确认：1.CSV文件已上传到GitHub 2.文件名大小写一致 3.文件在脚本同一目录")
+        st.error(f"❌ CSV文件不存在！路径：{csv_path}")
         st.stop()
     
-    # 第二步：尝试多种编码（优先UTF-8-sig，兼容GitHub的UTF-8编码）
-    encodings = ["utf-8-sig", "utf-8", "gbk", "gb2312", "latin-1"]  # 调整编码优先级
+    # 尝试编码（保留逻辑，去掉编码失败的警告）
+    encodings = ["utf-8-sig", "utf-8", "gbk", "gb2312", "latin-1"]
     for encoding in encodings:
         try:
             df = pd.read_csv(csv_path, encoding=encoding)
-            # 标准化列名（去除空格、统一格式）
             df.columns = df.columns.str.strip().str.replace(" ", "")
             # 检查必要列
             required_cols = ["年龄", "性别", "子女数量", "是否吸烟", "区域", "医疗费用"]
@@ -53,21 +44,14 @@ def load_data():
             if missing_cols:
                 st.error(f"❌ CSV缺少必要列：{', '.join(missing_cols)}")
                 st.stop()
-            # 分离特征与目标
             X = df[["年龄", "性别", "子女数量", "是否吸烟", "区域"]]
             y = df["医疗费用"]
-            st.success(f"✅ 成功读取CSV文件（编码：{encoding}）")
+            # 去掉“成功读取”的提示
             return X, y, df
-        except UnicodeDecodeError:
-            st.warning(f"⚠️ 编码{encoding}读取失败，尝试下一个...")
-            continue
-        except Exception as e:
-            st.warning(f"⚠️ 编码{encoding}读取出错：{str(e)}")
+        except:
             continue
     
-    # 所有编码尝试失败
     st.error(f"❌ 无法读取CSV文件（已尝试编码：{', '.join(encodings)}）")
-    st.error("建议：将本地CSV文件转成UTF-8编码后重新上传（用Notepad++/Excel另存为）")
     st.stop()
 
 # ---------------------- 2. 模型训练与保存（无修改） ----------------------
@@ -77,7 +61,6 @@ def train_model(X, y):
         X, y, test_size=0.2, random_state=42
     )
     
-    # 预处理流水线
     categorical_features = ["性别", "是否吸烟", "区域"]
     numerical_features = ["年龄", "子女数量"]
     
@@ -88,28 +71,25 @@ def train_model(X, y):
         ]
     )
     
-    # 模型流水线
     model = Pipeline(steps=[
         ("preprocessor", preprocessor),
         ("regressor", RandomForestRegressor(n_estimators=100, random_state=42))
     ])
     
-    # 训练与评估
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     r2 = r2_score(y_test, y_pred)
     mae = mean_absolute_error(y_test, y_pred)
     
-    # 保存模型（用绝对路径）
     model_path = pathlib.Path(__file__).parent.absolute() / "model.pkl"
     joblib.dump(model, model_path)
     
     return model, r2, mae
 
-# ---------------------- 3. 加载模型（修复模型路径） ----------------------
+# ---------------------- 3. 加载模型（无修改） ----------------------
 def load_model():
     """加载或训练模型"""
-    model_path = pathlib.Path(__file__).parent.absolute() / "model.pkl"  # 绝对路径
+    model_path = pathlib.Path(__file__).parent.absolute() / "model.pkl"
     if os.path.exists(model_path):
         try:
             return joblib.load(model_path)
@@ -122,16 +102,13 @@ def load_model():
         model, _, _ = train_model(X, y)
         return model
 
-# ---------------------- 4. Web界面（仅修复预测结果的货币符号） ----------------------
+# ---------------------- 4. Web界面（无修改） ----------------------
 def main():
-    # 侧边栏导航
     st.sidebar.title("🧭 导航")
-    
-    # 导航选项
     page = st.sidebar.radio(
         "",
         ["简介", "预测医疗费用"],
-        index=1  # 默认选择"预测医疗费用"
+        index=1
     )
     
     if page == "简介":
@@ -140,10 +117,8 @@ def main():
         show_prediction_page()
 
 def show_introduction():
-    """显示简介页面"""
     st.title("🏥 医疗费用预测系统")
     st.markdown("---")
-    
     st.markdown("""
     ## 📋 系统简介
     
@@ -178,17 +153,14 @@ def show_introduction():
     """)
 
 def show_prediction_page():
-    """显示预测页面"""
     st.title("🏥 医疗费用预测系统")
     st.markdown("---")
     st.markdown("基于外部CSV数据的医疗费用预测工具")
     st.markdown("---")
     
-    # 加载数据与模型
     X, y, df = load_data()
     model = load_model()
     
-    # 模型性能
     with st.expander("📊 模型性能", expanded=False):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         y_pred = model.predict(X_test)
@@ -199,9 +171,8 @@ def show_prediction_page():
         with col1:
             st.metric("决定系数(R²)", f"{r2:.4f}")
         with col2:
-            st.metric("平均绝对误差(MAE)", f"¥{mae:.2f}")  # 把$改成¥，适配中文场景
+            st.metric("平均绝对误差(MAE)", f"¥{mae:.2f}")
     
-    # 输入表单
     st.markdown("---")
     st.subheader("📝 被保险人信息")
     
@@ -213,10 +184,9 @@ def show_prediction_page():
     
     with col2:
         smoker = st.radio("是否吸烟", options=["否", "是"], horizontal=True)
-        region = st.selectbox("区域", options=df["区域"].unique().tolist())  # 自动读取CSV中的区域选项
+        region = st.selectbox("区域", options=df["区域"].unique().tolist())
         bmi = st.number_input("BMI指数", min_value=10.0, max_value=50.0, value=25.0, step=0.1)
     
-    # 预测按钮
     st.markdown("---")
     if st.button("🚀 预测医疗费用", type="primary"):
         input_data = pd.DataFrame({
@@ -231,9 +201,8 @@ def show_prediction_page():
             prediction = model.predict(input_data)[0]
             st.success("预测完成！")
             st.markdown("---")
-            st.subheader(f"💰 预计年度医疗费用：¥{prediction:,.2f}")  # 把$改成¥
+            st.subheader(f"💰 预计年度医疗费用：¥{prediction:,.2f}")
             
-            # 风险提示
             warnings = []
             if smoker == "是": warnings.append("吸烟会显著增加医疗费用风险")
             if bmi > 30: warnings.append("BMI过高可能增加健康风险")
@@ -246,7 +215,6 @@ def show_prediction_page():
         except Exception as e:
             st.error(f"预测失败：{str(e)}")
     
-    # 数据预览
     with st.expander("📋 CSV数据预览", expanded=False):
         st.dataframe(df.head(10), use_container_width=True)
 
