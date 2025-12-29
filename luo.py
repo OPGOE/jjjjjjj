@@ -19,44 +19,42 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------------------- 1. 加载外部CSV文件（移除调试信息） ----------------------
+# ---------------------- 1. 加载外部CSV文件（彻底移除所有调试输出） ----------------------
 @st.cache_data
 def load_data():
-    """加载外部CSV文件（移除调试输出）"""
-    # 脚本绝对路径（保留路径逻辑，仅去掉打印）
+    # 脚本绝对路径（仅保留路径逻辑，无任何打印）
     script_dir = pathlib.Path(__file__).parent.absolute()
     csv_path = script_dir / "insurance-chinese.csv"
     
-    # 检查文件是否存在
+    # 仅在文件不存在时显示错误（无其他提示）
     if not os.path.exists(csv_path):
-        st.error(f"❌ CSV文件不存在！路径：{csv_path}")
+        st.error(f"CSV文件不存在：{csv_path}")
         st.stop()
     
-    # 尝试编码（保留逻辑，去掉编码失败的警告）
+    # 尝试编码（无任何提示，失败则继续）
     encodings = ["utf-8-sig", "utf-8", "gbk", "gb2312", "latin-1"]
     for encoding in encodings:
         try:
             df = pd.read_csv(csv_path, encoding=encoding)
             df.columns = df.columns.str.strip().str.replace(" ", "")
-            # 检查必要列
+            # 检查必要列（仅在缺失时显示错误）
             required_cols = ["年龄", "性别", "子女数量", "是否吸烟", "区域", "医疗费用"]
             missing_cols = [col for col in required_cols if col not in df.columns]
             if missing_cols:
-                st.error(f"❌ CSV缺少必要列：{', '.join(missing_cols)}")
+                st.error(f"CSV缺少列：{', '.join(missing_cols)}")
                 st.stop()
             X = df[["年龄", "性别", "子女数量", "是否吸烟", "区域"]]
             y = df["医疗费用"]
-            # 去掉“成功读取”的提示
             return X, y, df
         except:
-            continue
+            pass  # 彻底关闭所有编码相关提示
     
-    st.error(f"❌ 无法读取CSV文件（已尝试编码：{', '.join(encodings)}）")
+    # 所有编码失败时才显示错误
+    st.error("无法读取CSV文件，请检查编码格式")
     st.stop()
 
-# ---------------------- 2. 模型训练与保存（无修改） ----------------------
+# ---------------------- 2. 模型训练与保存 ----------------------
 def train_model(X, y):
-    """训练随机森林回归模型"""
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
@@ -86,9 +84,8 @@ def train_model(X, y):
     
     return model, r2, mae
 
-# ---------------------- 3. 加载模型（无修改） ----------------------
+# ---------------------- 3. 加载模型 ----------------------
 def load_model():
-    """加载或训练模型"""
     model_path = pathlib.Path(__file__).parent.absolute() / "model.pkl"
     if os.path.exists(model_path):
         try:
@@ -102,7 +99,7 @@ def load_model():
         model, _, _ = train_model(X, y)
         return model
 
-# ---------------------- 4. Web界面（无修改） ----------------------
+# ---------------------- 4. Web界面 ----------------------
 def main():
     st.sidebar.title("🧭 导航")
     page = st.sidebar.radio(
